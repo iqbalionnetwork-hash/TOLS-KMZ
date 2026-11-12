@@ -76,6 +76,14 @@
   td button { padding: 3px 10px; font-size: 0.85rem; }
   .errors { margin: 16px 0 0; padding: 0; list-style: none; color: var(--warn); }
   .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+  .dobel-info {
+    margin: 0 0 12px; padding: 10px 12px; border-radius: 6px;
+    border: 1px solid var(--warn); color: var(--warn); background: var(--panel);
+  }
+  .dobel-info ul { margin: 6px 0 0; padding-left: 20px; }
+  tr.dobel td { background: rgba(164, 56, 15, 0.08); }
+  .badge { color: var(--warn); font-weight: 600; font-size: 0.85rem; }
+  .cek { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-weight: 400 !important; }
   .teks { margin-top: 28px; }
   .teks h2 { font-size: 1.1rem; margin: 0 0 4px; }
   .teks label { display: block; font-weight: 600; margin: 12px 0 4px; }
@@ -113,6 +121,7 @@
       <button id="unduh" class="primary">Unduh CSV</button>
       <button id="bersihkan">Hapus semua</button>
     </div>
+    <div class="dobel-info" id="dobel" hidden></div>
     <div class="wrap">
       <table>
         <thead>
@@ -128,6 +137,10 @@
       <label for="judul">Judul</label>
       <input type="text" id="judul" value="jalur odp {file} tikor TIANG 7M">
       <p class="hint">{file} otomatis diganti nama file KML tanpa .kml. Ubah teks lainnya sesuai kebutuhan.</p>
+      <label class="cek" for="tanpaDobel">
+        <input type="checkbox" id="tanpaDobel">
+        Hapus titik dobel dari hasil teks (yang dipakai hanya kemunculan pertama)
+      </label>
       <label for="keluaran">Hasil</label>
       <textarea id="keluaran" readonly></textarea>
       <div class="aksi">
@@ -221,18 +234,60 @@
     });
   }
 
+  // Titik dobel = koordinat DMS sama persis (sampai 0,01 detik) di file yang sama.
+  // Kemunculan pertama dianggap asli, kemunculan berikutnya ditandai "ulang".
+  function tandaiDobel() {
+    var grup = {};
+    titik.forEach(function (t, i) {
+      t.dobel = false;
+      t.ulang = false;
+      var kunci = t.file + "|" + formatDMS(t.lat, t.lon);
+      if (!grup[kunci]) grup[kunci] = { file: t.file, dms: formatDMS(t.lat, t.lon), baris: [] };
+      grup[kunci].baris.push(i);
+    });
+    var daftar = [];
+    var kelebihan = 0;
+    Object.keys(grup).forEach(function (k) {
+      var g = grup[k];
+      if (g.baris.length < 2) return;
+      g.baris.forEach(function (idx, n) {
+        titik[idx].dobel = true;
+        if (n > 0) titik[idx].ulang = true;
+      });
+      kelebihan += g.baris.length - 1;
+      daftar.push(g);
+    });
+    return { kelebihan: kelebihan, daftar: daftar };
+  }
+
+  function tampilkanDobel(dobel) {
+    var el = document.getElementById("dobel");
+    if (!dobel.daftar.length) { el.hidden = true; el.innerHTML = ""; return; }
+    var item = dobel.daftar.map(function (g) {
+      var nomor = g.baris.map(function (i) { return i + 1; }).join(", ");
+      return "<li>" + esc(g.dms) + " muncul " + g.baris.length + "x di " + esc(g.file) + " (no " + nomor + ")</li>";
+    }).join("");
+    el.innerHTML = "<strong>Ada " + dobel.kelebihan + " titik dobel</strong> dari " +
+      dobel.daftar.length + " lokasi yang berulang:<ul>" + item + "</ul>";
+    el.hidden = false;
+  }
+
   function tampilkan() {
     var hasil = document.getElementById("hasil");
     hasil.hidden = titik.length === 0;
     var jumlahFile = new Set(titik.map(function (t) { return t.file; })).size;
-    document.getElementById("info").textContent = titik.length + " titik dari " + jumlahFile + " file";
+    var dobel = tandaiDobel();
+    var info = titik.length + " titik dari " + jumlahFile + " file";
+    if (dobel.kelebihan > 0) info += ", " + dobel.kelebihan + " titik dobel";
+    document.getElementById("info").textContent = info;
+    tampilkanDobel(dobel);
     buatTeks();
     var isi = document.getElementById("isi");
     isi.innerHTML = titik.map(function (t, i) {
-      return "<tr>" +
+      return '<tr' + (t.dobel ? ' class="dobel"' : "") + ">" +
         '<td class="num">' + (i + 1) + "</td>" +
         "<td>" + esc(t.file) + "</td>" +
-        "<td>" + esc(t.nama) + "</td>" +
+        "<td>" + esc(t.nama) + (t.dobel ? ' <span class="badge">dobel</span>' : "") + "</td>" +
         '<td class="dms">' + esc(formatDMS(t.lat, t.lon)) + "</td>" +
         '<td class="dec">' + t.lat.toFixed(6) + ", " + t.lon.toFixed(6) + "</td>" +
         '<td><button data-i="' + i + '">Salin</button></td>' +
@@ -245,7 +300,9 @@
     var judul = document.getElementById("judul").value;
     var urutan = [];
     var kelompok = {};
+    var tanpaDobel = document.getElementById("tanpaDobel").checked;
     titik.forEach(function (t) {
+      if (tanpaDobel && t.ulang) return;
       if (!kelompok[t.file]) { kelompok[t.file] = []; urutan.push(t.file); }
       kelompok[t.file].push(t);
     });
@@ -258,6 +315,7 @@
   }
 
   document.getElementById("judul").addEventListener("input", buatTeks);
+  document.getElementById("tanpaDobel").addEventListener("change", buatTeks);
 
   document.getElementById("salinTeks").addEventListener("click", function (e) {
     salin(document.getElementById("keluaran").value, e.currentTarget);
