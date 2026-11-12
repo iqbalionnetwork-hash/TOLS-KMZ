@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pembaca Koordinat KML</title>
+<style>
+  :root {
+    --bg: #eef2f1;
+    --panel: #ffffff;
+    --ink: #14262b;
+    --muted: #5b6d70;
+    --line: #c9d4d2;
+    --accent: #0b6e6e;
+    --accent-ink: #ffffff;
+    --warn: #a4380f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1a1c;
+      --panel: #16262a;
+      --ink: #e6efee;
+      --muted: #93a8ab;
+      --line: #2b4146;
+      --accent: #4cc2b8;
+      --accent-ink: #062321;
+      --warn: #ff9a6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .drop {
+    display: block;
+    border: 2px dashed var(--line);
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 36px 16px;
+    text-align: center;
+    cursor: pointer;
+  }
+  .drop:hover, .drop:focus-within, .drop.over { border-color: var(--accent); }
+  .drop strong { display: block; font-size: 1.1rem; margin-bottom: 4px; }
+  .drop span { color: var(--muted); }
+  .drop input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 20px 0 12px; }
+  .bar .info { margin-right: auto; color: var(--muted); }
+  button {
+    font: inherit;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--ink);
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:focus-visible, .drop:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 0.9rem; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { color: var(--muted); width: 48px; }
+  td.dms { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: nowrap; }
+  td.dec { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--muted); font-size: 0.88rem; white-space: nowrap; }
+  td button { padding: 3px 10px; font-size: 0.85rem; }
+  .errors { margin: 16px 0 0; padding: 0; list-style: none; color: var(--warn); }
+  .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+  .teks { margin-top: 28px; }
+  .teks h2 { font-size: 1.1rem; margin: 0 0 4px; }
+  .teks label { display: block; font-weight: 600; margin: 12px 0 4px; }
+  .teks input[type=text] {
+    width: 100%; font: inherit; padding: 8px 10px; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  }
+  .teks textarea {
+    width: 100%; min-height: 220px; font: 0.95rem/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace;
+    padding: 10px 12px; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 6px; resize: vertical;
+  }
+  .teks .hint { color: var(--muted); font-size: 0.9rem; margin: 4px 0 0; }
+  .teks .aksi { display: flex; gap: 8px; margin-top: 10px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Pembaca Koordinat KML</h1>
+  <p class="sub">Unggah satu atau beberapa file KML. Koordinat dibaca langsung di browser Anda, tidak ada file yang dikirim ke server.</p>
+
+  <label class="drop" id="drop">
+    <strong>Pilih file KML atau seret ke sini</strong>
+    <span>Bisa lebih dari satu file sekaligus (.kml)</span>
+    <input type="file" id="input" accept=".kml,application/vnd.google-earth.kml+xml" multiple>
+  </label>
+
+  <ul class="errors" id="errors"></ul>
+
+  <div id="hasil" hidden>
+    <div class="bar">
+      <span class="info" id="info"></span>
+      <button id="salinSemua">Salin semua</button>
+      <button id="unduh" class="primary">Unduh CSV</button>
+      <button id="bersihkan">Hapus semua</button>
+    </div>
+    <div class="wrap">
+      <table>
+        <thead>
+          <tr><th>No</th><th>File</th><th>Nama</th><th>Koordinat (DMS)</th><th>Desimal (lat, lon)</th><th></th></tr>
+        </thead>
+        <tbody id="isi"></tbody>
+      </table>
+    </div>
+
+    <section class="teks">
+      <h2>Hasil teks (tikor saja)</h2>
+      <p class="sub" style="margin:0">Siap salin. Satu blok untuk setiap file.</p>
+      <label for="judul">Judul</label>
+      <input type="text" id="judul" value="jalur odp {file} tikor TIANG 7M">
+      <p class="hint">{file} otomatis diganti nama file KML tanpa .kml. Ubah teks lainnya sesuai kebutuhan.</p>
+      <label for="keluaran">Hasil</label>
+      <textarea id="keluaran" readonly></textarea>
+      <div class="aksi">
+        <button id="salinTeks" class="primary">Salin teks</button>
+        <button id="unduhTeks">Unduh TXT</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+  var titik = [];
+
+  // Ubah angka desimal ke derajat-menit-detik, contoh: 3°33'37.33"N
+  function keDMS(nilai, positif, negatif) {
+    var arah = nilai >= 0 ? positif : negatif;
+    var sentidetik = Math.round(Math.abs(nilai) * 360000); // pembulatan ke 0,01 detik
+    var derajat = Math.floor(sentidetik / 360000);
+    var sisa = sentidetik % 360000;
+    var menit = Math.floor(sisa / 6000);
+    var detik = (sisa % 6000) / 100;
+    return derajat + "\u00B0" + String(menit).padStart(2, "0") + "'" +
+      detik.toFixed(2).padStart(5, "0") + '"' + arah;
+  }
+
+  function formatDMS(lat, lon) {
+    return keDMS(lat, "N", "S") + " " + keDMS(lon, "E", "W");
+  }
+
+  // Baca satu file KML, kembalikan daftar titik
+  function bacaKML(teks, namaFile) {
+    var doc = new DOMParser().parseFromString(teks, "application/xml");
+    if (doc.getElementsByTagName("parsererror").length) {
+      throw new Error("bukan file KML yang valid");
+    }
+    var hasil = [];
+    var daftar = doc.getElementsByTagNameNS("*", "Placemark");
+    for (var i = 0; i < daftar.length; i++) {
+      var pm = daftar[i];
+      var namaEl = null;
+      for (var c = 0; c < pm.children.length; c++) {
+        var ln = pm.children[c].localName;
+        if (ln === "name" || ln === "n") { namaEl = pm.children[c]; break; }
+      }
+      var nama = namaEl ? namaEl.textContent.trim() : "(tanpa nama)";
+      var koorList = pm.getElementsByTagNameNS("*", "coordinates");
+      for (var k = 0; k < koorList.length; k++) {
+        var bagian = koorList[k].textContent.trim().split(/\s+/);
+        for (var b = 0; b < bagian.length; b++) {
+          var angka = bagian[b].split(",").map(Number);
+          var lon = angka[0], lat = angka[1];
+          if (isNaN(lon) || isNaN(lat)) continue;
+          hasil.push({ file: namaFile, nama: nama, lat: lat, lon: lon, alt: isNaN(angka[2]) ? "" : angka[2] });
+        }
+      }
+    }
+    return hasil;
+  }
+
+  function bacaFile(file) {
+    return new Promise(function (selesai, gagal) {
+      var r = new FileReader();
+      r.onload = function () { selesai(r.result); };
+      r.onerror = function () { gagal(new Error("file tidak bisa dibaca")); };
+      r.readAsText(file);
+    });
+  }
+
+  async function prosesFile(daftarFile) {
+    var errors = document.getElementById("errors");
+    errors.innerHTML = "";
+    for (var i = 0; i < daftarFile.length; i++) {
+      var f = daftarFile[i];
+      try {
+        var teks = await bacaFile(f);
+        var dapat = bacaKML(teks, f.name);
+        if (!dapat.length) throw new Error("tidak ada titik koordinat");
+        titik = titik.concat(dapat);
+      } catch (e) {
+        var li = document.createElement("li");
+        li.textContent = f.name + ": " + e.message;
+        errors.appendChild(li);
+      }
+    }
+    tampilkan();
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (m) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m];
+    });
+  }
+
+  function tampilkan() {
+    var hasil = document.getElementById("hasil");
+    hasil.hidden = titik.length === 0;
+    var jumlahFile = new Set(titik.map(function (t) { return t.file; })).size;
+    document.getElementById("info").textContent = titik.length + " titik dari " + jumlahFile + " file";
+    buatTeks();
+    var isi = document.getElementById("isi");
+    isi.innerHTML = titik.map(function (t, i) {
+      return "<tr>" +
+        '<td class="num">' + (i + 1) + "</td>" +
+        "<td>" + esc(t.file) + "</td>" +
+        "<td>" + esc(t.nama) + "</td>" +
+        '<td class="dms">' + esc(formatDMS(t.lat, t.lon)) + "</td>" +
+        '<td class="dec">' + t.lat.toFixed(6) + ", " + t.lon.toFixed(6) + "</td>" +
+        '<td><button data-i="' + i + '">Salin</button></td>' +
+        "</tr>";
+    }).join("");
+  }
+
+  // Susun teks: judul, baris kosong, lalu "-tikor" per titik. Satu blok per file.
+  function buatTeks() {
+    var judul = document.getElementById("judul").value;
+    var urutan = [];
+    var kelompok = {};
+    titik.forEach(function (t) {
+      if (!kelompok[t.file]) { kelompok[t.file] = []; urutan.push(t.file); }
+      kelompok[t.file].push(t);
+    });
+    var blok = urutan.map(function (file) {
+      var namaFile = file.replace(/\.kml$/i, "");
+      var baris = kelompok[file].map(function (t) { return "-" + formatDMS(t.lat, t.lon); });
+      return judul.split("{file}").join(namaFile) + "\n\n" + baris.join("\n");
+    });
+    document.getElementById("keluaran").value = blok.join("\n\n\n");
+  }
+
+  document.getElementById("judul").addEventListener("input", buatTeks);
+
+  document.getElementById("salinTeks").addEventListener("click", function (e) {
+    salin(document.getElementById("keluaran").value, e.currentTarget);
+  });
+
+  document.getElementById("unduhTeks").addEventListener("click", function () {
+    var blob = new Blob([document.getElementById("keluaran").value], { type: "text/plain;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "tikor.txt";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  async function salin(teks, tombol) {
+    try {
+      await navigator.clipboard.writeText(teks);
+      var lama = tombol.textContent;
+      tombol.textContent = "Tersalin";
+      setTimeout(function () { tombol.textContent = lama; }, 1200);
+    } catch (e) {
+      alert("Gagal menyalin. Salin manual dari tabel.");
+    }
+  }
+
+  document.getElementById("isi").addEventListener("click", function (e) {
+    var tombol = e.target.closest("button[data-i]");
+    if (!tombol) return;
+    var t = titik[Number(tombol.dataset.i)];
+    salin(formatDMS(t.lat, t.lon), tombol);
+  });
+
+  document.getElementById("salinSemua").addEventListener("click", function (e) {
+    var teks = titik.map(function (t) { return t.nama + "\t" + formatDMS(t.lat, t.lon); }).join("\n");
+    salin(teks, e.currentTarget);
+  });
+
+  document.getElementById("unduh").addEventListener("click", function () {
+    var baris = ["no,file,nama,dms,latitude,longitude,altitude"];
+    titik.forEach(function (t, i) {
+      var q = function (s) { return '"' + String(s).replace(/"/g, '""') + '"'; };
+      baris.push([i + 1, q(t.file), q(t.nama), q(formatDMS(t.lat, t.lon)), t.lat, t.lon, t.alt].join(","));
+    });
+    var blob = new Blob(["\uFEFF" + baris.join("\n")], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "koordinat.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  document.getElementById("bersihkan").addEventListener("click", function () {
+    titik = [];
+    document.getElementById("errors").innerHTML = "";
+    document.getElementById("input").value = "";
+    tampilkan();
+  });
+
+  var input = document.getElementById("input");
+  input.addEventListener("change", function () {
+    prosesFile(Array.from(input.files));
+    input.value = "";
+  });
+
+  var drop = document.getElementById("drop");
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    var files = Array.from(e.dataTransfer.files).filter(function (f) { return /\.kml$/i.test(f.name); });
+    if (files.length) prosesFile(files);
+  });
+</script>
+</body>
+</html>
