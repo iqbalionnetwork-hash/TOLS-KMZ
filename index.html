@@ -83,7 +83,23 @@
   .dobel-info ul { margin: 6px 0 0; padding-left: 20px; }
   tr.dobel td { background: rgba(164, 56, 15, 0.08); }
   .badge { color: var(--warn); font-weight: 600; font-size: 0.85rem; }
-  .cek { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-weight: 400 !important; }
+  .teks label.cek { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; font-weight: 400; }
+  .teks label.saklar {
+    display: flex; align-items: center; gap: 12px; margin: 16px 0 0;
+    cursor: pointer; font-weight: 400; position: relative;
+  }
+  .saklar input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .saklar .trek {
+    display: block; width: 42px; height: 24px; border-radius: 12px; background: var(--line);
+    position: relative; flex: none; transition: background 0.15s;
+  }
+  .saklar .trek::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--panel); border: 1px solid var(--muted); transition: transform 0.15s;
+  }
+  .saklar input:checked + .trek { background: var(--accent); }
+  .saklar input:checked + .trek::after { transform: translateX(18px); border-color: var(--accent-ink); }
+  .saklar input:focus-visible + .trek { outline: 3px solid var(--accent); outline-offset: 2px; }
   .teks { margin-top: 28px; }
   .teks h2 { font-size: 1.1rem; margin: 0 0 4px; }
   .teks label { display: block; font-weight: 600; margin: 12px 0 4px; }
@@ -137,6 +153,11 @@
       <label for="judul">Judul</label>
       <input type="text" id="judul" value="jalur odp {file} tikor TIANG 7M">
       <p class="hint">{file} otomatis diganti nama file KML tanpa .kml. Ubah teks lainnya sesuai kebutuhan.</p>
+      <label class="saklar" for="pakaiStrip">
+        <input type="checkbox" id="pakaiStrip" checked>
+        <span class="trek"></span>
+        <span id="labelStrip">Pakai tanda - di depan: -3°33'10.76"N 98°57'45.73"E</span>
+      </label>
       <label class="cek" for="tanpaDobel">
         <input type="checkbox" id="tanpaDobel">
         Hapus titik dobel dari hasil teks (yang dipakai hanya kemunculan pertama)
@@ -308,7 +329,8 @@
     });
     var blok = urutan.map(function (file) {
       var namaFile = file.replace(/\.kml$/i, "");
-      var baris = kelompok[file].map(function (t) { return "-" + formatDMS(t.lat, t.lon); });
+      var awalan = document.getElementById("pakaiStrip").checked ? "-" : "";
+      var baris = kelompok[file].map(function (t) { return awalan + formatDMS(t.lat, t.lon); });
       return judul.split("{file}").join(namaFile) + "\n\n" + baris.join("\n");
     });
     document.getElementById("keluaran").value = blok.join("\n\n\n");
@@ -316,6 +338,12 @@
 
   document.getElementById("judul").addEventListener("input", buatTeks);
   document.getElementById("tanpaDobel").addEventListener("change", buatTeks);
+  document.getElementById("pakaiStrip").addEventListener("change", function () {
+    document.getElementById("labelStrip").textContent = this.checked
+      ? "Pakai tanda - di depan: -3°33'10.76\"N 98°57'45.73\"E"
+      : "Tanpa tanda - di depan: 3°33'10.76\"N 98°57'45.73\"E";
+    buatTeks();
+  });
 
   document.getElementById("salinTeks").addEventListener("click", function (e) {
     salin(document.getElementById("keluaran").value, e.currentTarget);
